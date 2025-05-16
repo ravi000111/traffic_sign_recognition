@@ -59,32 +59,46 @@ class_id_to_name = {
 model = load_model()
 
 st.title("🚦 Traffic Sign Recognition")
-
-st.write("Upload an image of a traffic sign, and the model will predict its class.")
+st.write("Upload an image of a traffic sign, and the model will predict its class and show detailed probabilities.")
 
 uploaded_file = st.file_uploader("Choose an image...", type=["png", "jpg", "jpeg"])
 if uploaded_file:
-    # Display image
-    image = Image.open(uploaded_file).convert("RGB")
-    st.image(image, caption='Uploaded Image', use_column_width=True)
-
-    # Preprocess
-    img = image.resize((30, 30))
-    img_array = np.array(img) / 255.0
+    # Load and preprocess image exactly as during training
+    image = Image.open(uploaded_file)
+    # Resize
+    image = image.resize((30, 30))
+    # Convert to numpy array
+    img_array = np.array(image)
+    # Drop alpha channel if present
+    if img_array.shape[-1] == 4:
+        img_array = img_array[:, :, :3]
+    # Normalize
+    img_array = img_array / 255.0
+    # Add batch dimension
     img_array = img_array.reshape(1, 30, 30, 3)
 
+    # Display the uploaded image
+    st.image(image, caption='Uploaded Image', use_column_width=True)
+
     # Predict
-    preds = model.predict(img_array)
-    class_idx = int(np.argmax(preds, axis=1)[0])
-    class_name = class_id_to_name.get(class_idx, "Unknown Sign")
-    confidence = float(np.max(preds))
+    preds = model.predict(img_array).flatten()
+    # Display raw probabilities
+    st.write("**Raw model probabilities:**")
+    st.write(np.round(preds, 4))
 
-    # Show result
-    st.markdown(f"**Predicted Class Index:** {class_idx}")
-    st.markdown(f"**Predicted Sign Name:** {class_name}")
-    st.markdown(f"**Confidence:** {confidence:.2%}")
+    # Top-1 prediction
+    top1 = int(np.argmax(preds))
+    st.markdown(f"**Predicted Class Index:** {top1}")
+    st.markdown(f"**Predicted Sign Name:** {class_id_to_name[top1]}")
+    st.markdown(f"**Confidence:** {preds[top1]*100:.2f}%")
 
-    # Optional: show probability bar chart
+    # Top-5 predictions
+    top5_idx = preds.argsort()[-5:][::-1]
+    st.write("**Top-5 Predictions:**")
+    for idx in top5_idx:
+        st.write(f"- {class_id_to_name[idx]}: {preds[idx]*100:.2f}%")
+
+    # Optional: probability bar chart
     import pandas as pd
-    df_probs = pd.DataFrame([preds.flatten()], columns=[class_id_to_name[i] for i in range(len(preds.flatten()))])
+    df_probs = pd.DataFrame([preds], columns=[class_id_to_name[i] for i in range(len(preds))])
     st.bar_chart(df_probs)
